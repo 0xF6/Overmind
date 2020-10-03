@@ -38,9 +38,13 @@ export class RandomWalkerScoutOverlord extends Overlord {
 			scout.task = Tasks.goToRoom(this.colony.room.name); // todo: make this more precise
 		} else {
 			// Pick a new room
+			function isRoomAvailable(roomName: string): boolean {
+				let result = (<any>Game.map).getRoomStatus(roomName);
+				return result.status === "normal" || result.status === "respawn";
+			}
 			const neighboringRooms = _.values(Game.map.describeExits(scout.pos.roomName)) as string[];
 			const roomName = _.sample(neighboringRooms);
-			if (Game.map.isRoomAvailable(roomName)) {
+			if (isRoomAvailable(roomName)) {
 				scout.task = Tasks.goToRoom(roomName);
 			}
 		}
