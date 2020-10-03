@@ -138,8 +138,8 @@ export class Swarm implements ProtoSwarm {
 			msg += '\n' + SPACE;
 			for (const name of row) {
 				if (name != 'NONE') {
-					const role = name.split('_')[0];
-					const num = name.split('_')[1];
+					const role = name.split('@')[0];
+					const num = name.split('@')[1];
 					const shortName = role.slice(0, 4 - num.length) + num;
 					msg += shortName;
 				} else {

@@ -277,9 +277,13 @@ export class Overseer implements IOverseer {
 			if (alreadyOwned || (alreadyReserved && !disregardReservations) || isBlocked) {
 				return false;
 			}
+			function isRoomAvailable(roomName: string): boolean {
+				let result = (<any>Game.map).getRoomStatus(roomName);
+				return result.status === "normal" || result.status === "respawn";
+			}
 			const neighboringRooms = _.values(Game.map.describeExits(roomName)) as string[];
 			const isReachableFromColony = _.any(neighboringRooms, r => colony.roomNames.includes(r));
-			return isReachableFromColony && Game.map.isRoomAvailable(roomName);
+			return isReachableFromColony && isRoomAvailable(roomName);
 		});
 	}
 

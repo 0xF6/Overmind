@@ -122,8 +122,13 @@ export class ExpansionPlanner implements IExpansionPlanner {
 						score += CATALYST_BONUS;
 					}
 				}
+				function isRoomAvailable(roomName: string): boolean {
+					let result = (<any>Game.map).getRoomStatus(roomName);
+					return result.status === "normal" || result.status === "respawn";
+				}
+
 				// Update best choices
-				if (score > bestScore && Game.map.isRoomAvailable(roomName)) {
+				if (score > bestScore && isRoomAvailable(roomName)) {
 					bestScore = score;
 					bestRoom = roomName;
 				}

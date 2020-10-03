@@ -207,10 +207,10 @@ export class Hatchery extends HiveCluster {
 	private generateCreepName(roleName: string): string {
 		// Generate a creep name based on the role and add a suffix to make it unique
 		let i = 0;
-		while (Game.creeps[(roleName + '_' + i)]) {
+		while (Game.creeps[(roleName + '@' + i)]) {
 			i++;
 		}
-		return (roleName + '_' + i);
+		return (roleName + '@' + i);
 	}
 
 	private spawnCreep(protoCreep: ProtoCreep, options: SpawnRequestOptions = {}): number {
@@ -416,7 +416,7 @@ export class Hatchery extends HiveCluster {
 		const spawnProgress: [number, number][] = [];
 		_.forEach(this.spawns, function(spawn) {
 			if (spawn.spawning) {
-				spawning.push(spawn.spawning.name.split('_')[0]);
+				spawning.push(spawn.spawning.name.split('@')[0]);
 				const timeElapsed = spawn.spawning.needTime - spawn.spawning.remainingTime;
 				spawnProgress.push([timeElapsed, spawn.spawning.needTime]);
 			}
