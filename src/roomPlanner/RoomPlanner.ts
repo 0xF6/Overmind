@@ -1,15 +1,15 @@
 import {Colony, getAllColonies} from '../Colony';
 import {log} from '../console/log';
 import {isOwnedStructure} from '../declarations/typeGuards';
-import {DirectiveHaul} from '../directives/resource/haul';
 import {DirectiveTerminalRebuildState} from '../directives/terminalState/terminalState_rebuild';
+import {RoomIntel} from '../intel/RoomIntel';
 import {Energetics} from '../logistics/Energetics';
 import {Autonomy, getAutonomyLevel, Mem} from '../memory/Memory';
 import {Pathing} from '../movement/Pathing';
 import {BuildPriorities, DemolishStructurePriorities} from '../priorities/priorities_structures';
 import {profile} from '../profiler/decorator';
 import {bullet} from '../utilities/stringConstants';
-import {derefCoords, hasMinerals, maxBy, onPublicServer} from '../utilities/utils';
+import {hasMinerals, maxBy, onPublicServer} from '../utilities/utils';
 import {Visualizer} from '../visuals/Visualizer';
 import {MY_USERNAME} from '../~settings';
 import {BarrierPlanner} from './BarrierPlanner';
@@ -48,7 +48,7 @@ export interface RoomPlan {
 	};
 }
 
-export interface PlannerMemory {
+export interface RoomPlannerMemory {
 	active: boolean;
 	relocating?: boolean;
 	recheckStructuresAt?: number;
@@ -60,10 +60,10 @@ export interface PlannerMemory {
 	savedFlags: { secondaryColor: ColorConstant, pos: ProtoPos, memory: FlagMemory }[];
 }
 
-const memoryDefaults: PlannerMemory = {
+const getDefaultRoomPlannerMemory: () => RoomPlannerMemory = () => ({
 	active    : true,
 	savedFlags: [],
-};
+});
 
 
 export function getAllStructureCoordsFromLayout(layout: StructureLayout, rcl: number): Coord[] {
@@ -95,7 +95,7 @@ export function translatePositions(positions: RoomPosition[], fromAnchor: Coord,
 @profile
 export class RoomPlanner {
 	colony: Colony;							// The colony this is for
-	memory: PlannerMemory;
+	memory: RoomPlannerMemory;
 	map: StructureMap;						// Flattened {structureType: RoomPositions[]} for final structure placements
 	placements: { 							// Used for generating the plan
 		hatchery: RoomPosition | undefined;
@@ -108,7 +108,7 @@ export class RoomPlanner {
 
 	static settings = {
 		recheckAfter      : 50,
-		siteCheckFrequency: onPublicServer() ? 300 : 100,	// how often to recheck for structures; doubled at RCL8
+		siteCheckFrequency: onPublicServer() ? 50 : 20,	// how often to recheck for structures; multiplied by RCL
 		linkCheckFrequency: 100,
 		maxSitesPerColony : onPublicServer() ? 10 : 25,
 		maxDismantleCount : 5,
@@ -116,14 +116,14 @@ export class RoomPlanner {
 
 	constructor(colony: Colony) {
 		this.colony = colony;
-		this.memory = Mem.wrap(this.colony.memory, 'roomPlanner', memoryDefaults);
+		this.memory = Mem.wrap(this.colony.memory, 'roomPlanner', getDefaultRoomPlannerMemory);
 		this.barrierPlanner = new BarrierPlanner(this);
 		this.roadPlanner = new RoadPlanner(this);
 		this.refresh();
 	}
 
 	refresh(): void {
-		this.memory = Mem.wrap(this.colony.memory, 'roomPlanner', memoryDefaults);
+		this.memory = Mem.wrap(this.colony.memory, 'roomPlanner', getDefaultRoomPlannerMemory);
 		this.placements = {
 			hatchery     : undefined,
 			commandCenter: undefined,
@@ -643,8 +643,7 @@ export class RoomPlanner {
 						break; // don't destroy terminal or storage when under RCL4 - can use energy inside
 					}
 					if (this.colony.level < 6
-						&& structureType == STRUCTURE_TERMINAL && hasMinerals((<StructureTerminal> structure).store)) {
-						DirectiveHaul.createIfNotPresent(structure.pos, 'pos');
+						&& structureType == STRUCTURE_TERMINAL && hasMinerals((<StructureTerminal>structure).store)) {
 						break; // don't destroy terminal when under RCL6 if there are resources available.
 					}
 					if (structureType != STRUCTURE_WALL && structureType != STRUCTURE_RAMPART) {
@@ -693,7 +692,8 @@ export class RoomPlanner {
 								}
 							}
 						}
-						const result = structure.destroy();
+						// TODO: adding this for safety for now; remove later
+						const result: any = 'destroy() disabled'; // structure.destroy();
 						if (result != OK) {
 							log.warning(`${this.colony.name}: couldn't destroy structure of type ` +
 										`"${structureType}" at ${structure.pos.print}. Result: ${result}`);
@@ -740,12 +740,15 @@ export class RoomPlanner {
 								// Destroy the structure if it is less important and not protected
 								if (!this.structureShouldBeHere(structure.structureType, pos)
 									&& !safeTypes.includes(structure.structureType)) {
-									const result = structure.destroy();
-									log.info(`${this.colony.name}: destroyed ${structure.structureType} at` +
-											 ` ${structure.pos.print}`);
+									const result = 'destroy() disabled' as any; // structure.destroy();
 									if (result == OK) {
+										log.info(`${this.colony.name}: destroyed ${structure.structureType} at` +
+												 ` ${structure.pos.print}`);
 										this.memory.recheckStructuresAt = Game.time +
 																		  RoomPlanner.settings.recheckAfter;
+									} else {
+										log.warning(`${this.colony.name}: couldn't destroy ${structure.structureType}` +
+													` at ${structure.pos.print}! Result: ${result}`);
 									}
 								}
 							}
@@ -815,7 +818,8 @@ export class RoomPlanner {
 		if (!upgradeLink) return this.colony.controller.pos;
 		// MiningSites by decreasing distance
 		const origin = (this.colony.storage || this.colony.terminal || _.first(this.colony.spawns) || this.colony).pos;
-		const farthestSources = _.sortBy(this.colony.room.sources, source => -1 * Pathing.distance(origin, source.pos));
+		const farthestSources = _.sortBy(this.colony.room.sources,
+										 source => -1 * (Pathing.distance(origin, source.pos) || Infinity));
 		for (const source of farthestSources) {
 			const sourceLink = source.pos.findClosestByLimitedRange(linksEtAl, 2);
 			if (!sourceLink) return source.pos;
@@ -853,18 +857,22 @@ export class RoomPlanner {
 	}
 
 	init(): void {
-		if (this.active && getAutonomyLevel() == Autonomy.Automatic) {
+		if (this.active) {
+			Overmind.overseer.notifier.alert(`Room planner active!`, this.colony.room.name);
+		}
+		if (this.active && getAutonomyLevel() == Autonomy.Automatic && !this.memory.bunkerData) {
 			let bunkerAnchor: RoomPosition;
 			if (this.colony.spawns.length > 0) { // in case of very first spawn
 				const lowerRightSpawn = maxBy(this.colony.spawns, s => 50 * s.pos.y + s.pos.x)!;
 				const spawnPos = lowerRightSpawn.pos;
 				bunkerAnchor = new RoomPosition(spawnPos.x - 4, spawnPos.y, spawnPos.roomName);
 			} else {
-				const expansionData = this.colony.room.memory[_RM.EXPANSION_DATA];
+				const expansionData = RoomIntel.getExpansionData(this.colony.room.name);
 				if (expansionData) {
-					bunkerAnchor = derefCoords(expansionData.bunkerAnchor, this.colony.room.name);
+					bunkerAnchor = expansionData.bunkerAnchor;
 				} else {
-					log.error(`Cannot determine anchor! No spawns or expansionData.bunkerAnchor for ${this.colony.print}!`);
+					log.error(`Cannot determine anchor! No spawns or expansionData.bunkerAnchor for ` +
+							  `${this.colony.print}!`);
 					return;
 				}
 			}
@@ -874,13 +882,16 @@ export class RoomPlanner {
 		this.roadPlanner.init();
 	}
 
+	requestRecheck(ticksFromNow = 1): void {
+		this.memory.recheckStructuresAt = Game.time + ticksFromNow;
+	}
+
 	shouldRecheck(offset = 0): boolean {
 		if (Game.time == (this.memory.recheckStructuresAt || Infinity) + offset) {
 			return true;
-		} else if (this.colony.level == 8) {
-			return Game.time % (2 * RoomPlanner.settings.siteCheckFrequency) == 2 * this.colony.id + offset;
 		} else {
-			return Game.time % RoomPlanner.settings.siteCheckFrequency == 2 * this.colony.id + offset;
+			const checkFreq = RoomPlanner.settings.siteCheckFrequency * this.colony.level;
+			return Game.time % checkFreq == (2 * this.colony.id + offset) % checkFreq;
 		}
 	}
 
@@ -916,12 +927,9 @@ export class RoomPlanner {
 	visuals(): void {
 		// Draw the map
 		if (getAutonomyLevel() < Autonomy.Automatic) {
-			const expansionData = this.colony.room.memory[_RM.EXPANSION_DATA];
+			const expansionData = RoomIntel.getExpansionData(this.colony.room.name);
 			if (expansionData) {
-				const bunkerPos = derefCoords(expansionData.bunkerAnchor, this.colony.room.name);
-				if (bunkerPos) {
-					Visualizer.drawLayout(bunkerLayout, bunkerPos, {opacity: 0.2});
-				}
+				Visualizer.drawLayout(bunkerLayout, expansionData.bunkerAnchor, {opacity: 0.2});
 			}
 		}
 		Visualizer.drawStructureMap(this.map);

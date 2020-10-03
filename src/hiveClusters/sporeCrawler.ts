@@ -1,7 +1,6 @@
 import {$} from '../caching/GlobalCache';
 import {Colony} from '../Colony';
 import {log} from '../console/log';
-import {TERMINAL_STATE_REBUILD} from '../directives/terminalState/terminalState_rebuild';
 import {CombatIntel} from '../intel/CombatIntel';
 import {WorkerOverlord} from '../overlords/core/worker';
 import {profile} from '../profiler/decorator';
@@ -102,8 +101,8 @@ export class SporeCrawler extends HiveCluster {
 	// 	}
 	// }
 
-	private preventRampartDecay() {
-		if (this.colony.level < 7 && this.towers.length > 0) {
+	private preventStructureDecay(includeRoads=true) {
+		if (this.towers.length > 0) {
 			// expensive to check all rampart hits; only run in intermediate RCL
 			const dyingRamparts = _.filter(this.room.ramparts, rampart =>
 				rampart.hits < WorkerOverlord.settings.barrierHits.critical
@@ -111,6 +110,18 @@ export class SporeCrawler extends HiveCluster {
 			if (dyingRamparts.length > 0) {
 				for (const tower of this.towers) {
 					tower.repair(tower.pos.findClosestByRange(dyingRamparts)!);
+				}
+				return;
+			}
+			// repair roads
+			if (includeRoads) {
+				const decayingRoads = _.filter(this.room.roads, road => road.hits < 0.2 * road.hitsMax);
+				if (decayingRoads.length > 0) {
+					const roadsToRepair = _.sample(decayingRoads, this.towers.length);
+					// ^ if |towers| > |roads| then this will have length of |roads|
+					for (const i in roadsToRepair) {
+						this.towers[i].repair(roadsToRepair[i]);
+					}
 				}
 			}
 		}
@@ -132,8 +143,8 @@ export class SporeCrawler extends HiveCluster {
 			const myDefenders = _.filter(this.room.creeps, creep => creep.getActiveBodyparts(ATTACK) > 1);
 			const myRangedDefenders = _.filter(this.room.creeps, creep => creep.getActiveBodyparts(RANGED_ATTACK) > 1);
 			const myCreepDamage = ATTACK_POWER * _.sum(myDefenders, creep => CombatIntel.getAttackPotential(creep)) +
-								RANGED_ATTACK_POWER * _.sum(myRangedDefenders,
-															creep => CombatIntel.getRangedAttackPotential(creep));
+								  RANGED_ATTACK_POWER * _.sum(myRangedDefenders,
+															  creep => CombatIntel.getRangedAttackPotential(creep));
 			const HEAL_FUDGE_FACTOR = 1.0;
 			const avgHealing = HEAL_FUDGE_FACTOR * CombatIntel.avgHostileHealingTo(this.room.hostiles);
 			let possibleTargets = _.filter(this.room.hostiles, hostile => {
@@ -165,12 +176,12 @@ export class SporeCrawler extends HiveCluster {
 					return true;
 				}
 			});
-			if (Game.time % 21 == 0 && _.filter(possibleTargets, target => target.hits < target.hitsMax /2).length == 0) {
+			if (Game.time % 21 == 0 && _.filter(possibleTargets, target => target.hits < target.hitsMax / 2).length == 0) {
 				// console.log('Scattershotting!');
 				return this.scatterShot(possibleTargets);
 			}
 			possibleTargets = possibleTargets.filter(enemy => enemy.hits < enemy.hitsMax / 2
-				|| enemy.pos.findInRange(FIND_MY_CREEPS, 3).length > 0);
+															  || enemy.pos.findInRange(FIND_MY_CREEPS, 3).length > 0);
 			const target = CombatTargeting.findBestCreepTargetForTowers(this.room, possibleTargets);
 			if (target) {
 				return this.attack(target);
@@ -178,7 +189,7 @@ export class SporeCrawler extends HiveCluster {
 		}
 
 		const closestDamagedAlly = this.pos.findClosestByRange(_.filter(this.room.creeps,
-																	  creep => creep.hits < creep.hitsMax));
+																		creep => creep.hits < creep.hitsMax));
 		if (closestDamagedAlly) {
 			for (const tower of this.towers) {
 				tower.heal(closestDamagedAlly);
@@ -188,9 +199,8 @@ export class SporeCrawler extends HiveCluster {
 
 		// Towers build nuke response ramparts
 		const nearbyNukeRamparts = _.filter(this.colony.overlords.work.nukeDefenseRamparts,
-										  rampart => this.pos.getRangeTo(rampart) <= TOWER_OPTIMAL_RANGE);
-		if (nearbyNukeRamparts.length > 0 && this.colony.terminal
-			&& this.colony.terminalState != TERMINAL_STATE_REBUILD) {
+											rampart => this.pos.getRangeTo(rampart) <= TOWER_OPTIMAL_RANGE);
+		if (nearbyNukeRamparts.length > 0 && this.colony.terminal && !this.colony.state.isRebuilding) {
 			const nukes = this.colony.room.find(FIND_NUKES);
 			const timeToImpact = _.min(_.map(nukes, nuke => nuke.timeToLand));
 			if (timeToImpact) {
@@ -210,7 +220,7 @@ export class SporeCrawler extends HiveCluster {
 		}
 
 		// Prevent rampart decay at early RCL
-		this.preventRampartDecay();
+		this.preventStructureDecay();
 	}
 
 	visuals() {

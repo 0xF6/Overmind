@@ -1,11 +1,12 @@
-import {Colony, ColonyMemory} from '../Colony';
+import {Colony, ColonyMemory, getAllColonies} from '../Colony';
 import {Directive} from '../directives/Directive';
+import {RoomIntel} from '../intel/RoomIntel';
 import {Overlord} from '../overlords/Overlord';
 import {EmpireAnalysis} from '../utilities/EmpireAnalysis';
 import {alignedNewline, bullet} from '../utilities/stringConstants';
-import {color, toColumns} from '../utilities/utils';
+import {color, printRoomName, toColumns} from '../utilities/utils';
 import {asciiLogoRL, asciiLogoSmall} from '../visuals/logos';
-import {DEFAULT_OVERMIND_SIGNATURE, MY_USERNAME, USE_PROFILER} from '../~settings';
+import {DEFAULT_OVERMIND_SIGNATURE, MY_USERNAME, USE_SCREEPS_PROFILER} from '../~settings';
 import {log} from './log';
 
 type RecursiveObject = { [key: string]: number | RecursiveObject };
@@ -25,6 +26,8 @@ export class OvermindConsole {
 		global.setSignature = this.setSignature;
 		global.print = this.print;
 		global.timeit = this.timeit;
+		global.profileOverlord = this.profileOverlord;
+		global.finishProfilingOverlord = this.finishProfilingOverlord;
 		global.setLogLevel = log.setLogLevel;
 		global.suspendColony = this.suspendColony;
 		global.unsuspendColony = this.unsuspendColony;
@@ -37,6 +40,7 @@ export class OvermindConsole {
 		global.destroyAllHostileStructures = this.destroyAllHostileStructures;
 		global.destroyAllBarriers = this.destroyAllBarriers;
 		global.listConstructionSites = this.listConstructionSites;
+		global.removeUnbuiltConstructionSites = this.removeUnbuiltConstructionSites;
 		global.listDirectives = this.listDirectives;
 		global.listPersistentDirectives = this.listPersistentDirectives;
 		// global.directiveInfo = this.directiveInfo;
@@ -50,6 +54,7 @@ export class OvermindConsole {
 		global.cancelMarketOrders = this.cancelMarketOrders;
 		global.setRoomUpgradeRate = this.setRoomUpgradeRate;
 		global.getEmpireMineralDistribution = this.getEmpireMineralDistribution;
+		global.listPortals = this.listPortals;
 	}
 
 	// Help, information, and operational changes ======================================================================
@@ -61,6 +66,7 @@ export class OvermindConsole {
 		}
 		msg += '</font>';
 
+		// Generate a methods description object
 		const descr: { [functionName: string]: string } = {};
 		descr.help = 'show this message';
 		descr['info()'] = 'display version and operation information';
@@ -71,6 +77,8 @@ export class OvermindConsole {
 		descr['debug(thing)'] = 'enable debug logging for a game object or process';
 		descr['stopDebug(thing)'] = 'disable debug logging for a game object or process';
 		descr['timeit(function, repeat=1)'] = 'time the execution of a snippet of code';
+		descr['profileOverlord(overlord, ticks?)'] = 'start profiling on an overlord instance or name';
+		descr['finishProfilingOverlord(overlord)'] = 'stop profiling on an overlord';
 		descr['setLogLevel(int)'] = 'set the logging level from 0 - 4';
 		descr['suspendColony(roomName)'] = 'suspend operations within a colony';
 		descr['unsuspendColony(roomName)'] = 'resume operations within a suspended colony';
@@ -83,17 +91,19 @@ export class OvermindConsole {
 		descr['destroyAllHostileStructures(roomName)'] = 'destroys all hostile structures in an owned room';
 		descr['destroyAllBarriers(roomName)'] = 'destroys all ramparts and barriers in a room';
 		descr['listConstructionSites(filter?)'] = 'list all construction sites matching an optional filter';
+		descr['removeUnbuiltConstructionSites()'] = 'removes all construction sites with 0 progress';
 		descr['listDirectives(filter?)'] = 'list directives, matching a filter if specified';
 		descr['listPersistentDirectives()'] = 'print type, name, pos of every persistent directive';
-		// descr['directiveInfo(directiveFlag)'] = 'print type, name, pos of every creep in directive';
 		descr['removeFlagsByColor(color, secondaryColor)'] = 'remove flags that match the specified colors';
 		descr['removeErrantFlags()'] = 'remove all flags which don\'t match a directive';
 		descr['deepCleanMemory()'] = 'deletes all non-critical portions of memory (be careful!)';
-		descr['profileMemory(depth=1)'] = 'scan through memory to get the size of various objects';
+		descr['profileMemory(root=Memory, depth=1)'] = 'scan through memory to get the size of various objects';
 		descr['startRemoteDebugSession()'] = 'enables the remote debugger so Muon can debug your code';
 		descr['cancelMarketOrders(filter?)'] = 'cancels all market orders matching filter (if provided)';
 		descr['setRoomUpgradeRate(room, upgradeRate)'] = 'changes the rate which a room upgrades at, default is 1';
 		descr['getEmpireMineralDistribution()'] = 'returns current census of colonies and mined sk room minerals';
+		descr['getPortals(rangeFromColonies)'] = 'returns active portals within colony range';
+
 		// Console list
 		const descrMsg = toColumns(descr, {justify: true, padChar: '.'});
 		const maxLineLength = _.max(_.map(descrMsg, line => line.length)) + 2;
@@ -171,14 +181,14 @@ export class OvermindConsole {
 
 	// Debugging methods ===============================================================================================
 
-	static debug(thing: { name: string, memory: any }): string {
+	static debug(thing: { name?: string, ref?: string, memory: any }): string {
 		thing.memory.debug = true;
-		return `Enabled debugging for ${thing.name}.`;
+		return `Enabled debugging for ${thing.name || thing.ref || '(no name or ref)'}.`;
 	}
 
-	static stopDebug(thing: { name: string, memory: any }): string {
+	static stopDebug(thing: { name?: string, ref?: string, memory: any }): string {
 		delete thing.memory.debug;
-		return `Disabled debugging for ${thing.name}.`;
+		return `Disabled debugging for ${thing.name || thing.ref || '(no name or ref)'}.`;
 	}
 
 	static startRemoteDebugSession(): string {
@@ -192,6 +202,7 @@ export class OvermindConsole {
 	}
 
 	static print(...args: any[]): string {
+		let message = '';
 		for (const arg of args) {
 			let cache: any = [];
 			const msg = JSON.stringify(arg, function(key, value) {
@@ -212,9 +223,9 @@ export class OvermindConsole {
 				return value;
 			}, '\t');
 			cache = null;
-			console.log(msg);
+			message += '\n' + msg;
 		}
-		return 'Done.';
+		return message;
 	}
 
 	static timeit(callback: () => any, repeat = 1): string {
@@ -225,6 +236,29 @@ export class OvermindConsole {
 		}
 		used = Game.cpu.getUsed() - start;
 		return `CPU used: ${used}. Repetitions: ${repeat} (${used / repeat} each).`;
+	}
+
+	// Overlord profiling ==============================================================================================
+	static profileOverlord(overlord: Overlord | string, ticks?: number): string {
+		const overlordInstance = typeof overlord == 'string' ? Overmind.overlords[overlord]
+															 : overlord as Overlord | undefined;
+		if (!overlordInstance) {
+			return `No overlord found for ${overlord}!`;
+		} else {
+			overlordInstance.startProfiling(ticks);
+			return `Profiling ${overlordInstance.print} for ${ticks || 'indefinite'} ticks.`;
+		}
+	}
+
+	static finishProfilingOverlord(overlord: Overlord | string, ticks?: number): string {
+		const overlordInstance = typeof overlord == 'string' ? Overmind.overlords[overlord]
+															 : overlord as Overlord | undefined;
+		if (!overlordInstance) {
+			return `No overlord found for ${overlord}!`;
+		} else {
+			overlordInstance.finishProfiling();
+			return `Profiling ${overlordInstance.print} stopped.`;
+		}
 	}
 
 
@@ -385,7 +419,7 @@ export class OvermindConsole {
 
 	static removeErrantFlags(): string {
 		// This may need to be be run several times depending on visibility
-		if (USE_PROFILER) {
+		if (USE_SCREEPS_PROFILER) {
 			return `ERROR: should not be run while profiling is enabled!`;
 		}
 		let count = 0;
@@ -397,41 +431,6 @@ export class OvermindConsole {
 		}
 		return `Removed ${count} flags.`;
 	}
-
-	// TODO MERGE INTO DIRECTIVES
-	// static directiveInfo(flagName: string): string {
-	// 	let msg = '';
-	// 	const directive = Overmind.directives[flagName];
-	// 	if (!directive) {
-	// 		return `ERROR: Name is not a current directive`;
-	// 	}
-	// 	msg += `Type: ${directive.directiveName}`.padRight(20) +
-	// 		`Name: ${directive.name}`.padRight(25) +
-	// 		`Pos: ${directive.pos.print}\n`;
-	// 	for (const overlordName of Object.keys(directive.overlords)) {
-	// 		const overlord = directive.overlords[overlordName] as Overlord;
-	// 		msg += JSON.stringify(overlord.creepUsageReport) + `\n`;
-	// 		const zerg = overlord.getZerg();
-	// 		const combatZerg = overlord.getCombatZerg();
-	// 		for (const [roleName, zergArray] of Object.entries(zerg)) {
-	// 			msg += `Role: ${roleName} \n`;
-	// 			for (const zerg of zergArray) {
-	// 				msg += `Name: ${zerg.name}   Room: ${zerg.pos.print}   TTL/Spawning: ${zerg.ticksToLive || zerg.spawning} \n`;
-	// 			}
-	// 		}
-	// 		msg += `Combat zerg \n`;
-	// 		for (const [roleName, zergArray] of Object.entries(combatZerg)) {
-	// 			msg += `Role: ${roleName} \n`;
-	// 			for (const zerg of zergArray) {
-	// 				msg += `Name: ${zerg.name}   Room: ${zerg.pos.print}   TTL/Spawning: ${zerg.ticksToLive || zerg.spawning} \n`;
-	// 			}
-	// 		}
-	// 	}
-	//
-	// 	return msg;
-	// }
-
-
 
 
 	// Structure management ============================================================================================
@@ -475,6 +474,19 @@ export class OvermindConsole {
 		return `Destroyed ${room.barriers.length} barriers.`;
 	}
 
+	static removeUnbuiltConstructionSites(): string {
+		let msg = '';
+		for (const id in Game.constructionSites) {
+			const csite = Game.constructionSites[id];
+			if (csite.progress == 0) {
+				const ret = csite.remove();
+				msg += `Removing construction site for ${csite.structureType} with 0% progress at ` +
+					   `${csite.pos.print}; response: ${ret}\n`;
+			}
+		}
+		return msg;
+	}
+
 	// Colony Management =================================================================================================
 
 	static setRoomUpgradeRate(roomName: string, rate: number): string {
@@ -489,6 +501,24 @@ export class OvermindConsole {
 		let ret = 'Empire Mineral Distribution \n';
 		for (const mineral in minerals) {
 			ret += `${mineral}: ${minerals[mineral]} \n`;
+		}
+		return ret;
+	}
+
+	static listPortals(rangeFromColonies: number = 5, includeIntershard: boolean = false): string {
+		const colonies = getAllColonies();
+		const allPortals = colonies.map(colony => RoomIntel.findPortalsInRange(colony.name, rangeFromColonies));
+		let ret = `Empire Portal Census \n`;
+		for (const colonyId in allPortals) {
+			const portals = allPortals[colonyId];
+			if (_.keys(portals).length > 0) {
+				ret += `Colony ${colonies[colonyId].print}: \n`;
+			}
+			for (const portalRoomName of _.keys(portals)) {
+				const samplePortal = _.first(portals[portalRoomName]); // don't need to list all 8 in a room
+				ret += `\t\t Room ${printRoomName(portalRoomName)} Destination ${samplePortal.dest} ` +
+					   `Expiration ${samplePortal[MEM.EXPIRATION] - Game.time}] \n`;
+			}
 		}
 		return ret;
 	}
@@ -512,7 +542,7 @@ export class OvermindConsole {
 			}
 		}
 		// Remove profiler memory
-		delete Memory.profiler;
+		delete Memory.screepsProfiler;
 		// Remove overlords memory from flags
 		for (const i in Memory.flags) {
 			if ((<any>Memory.flags[i]).overlords) {
@@ -542,11 +572,11 @@ export class OvermindConsole {
 		}
 	}
 
-	static profileMemory(depth = 1): string {
+	static profileMemory(root = Memory, depth = 1): string {
 		const sizes: RecursiveObject = {};
 		console.log(`Profiling memory...`);
 		const start = Game.cpu.getUsed();
-		OvermindConsole.recursiveMemoryProfile(Memory, sizes, depth);
+		OvermindConsole.recursiveMemoryProfile(root, sizes, depth);
 		console.log(`Time elapsed: ${Game.cpu.getUsed() - start}`);
 		return JSON.stringify(sizes, undefined, '\t');
 	}

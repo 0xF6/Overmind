@@ -13,9 +13,9 @@ const multipleList = [
 ];
 
 const singleList = [
-	STRUCTURE_OBSERVER, STRUCTURE_POWER_SPAWN, STRUCTURE_EXTRACTOR, STRUCTURE_NUKER, STRUCTURE_FACTORY,
-	STRUCTURE_INVADER_CORE,
-	// STRUCTURE_TERMINAL,   STRUCTURE_CONTROLLER,   STRUCTURE_STORAGE,
+	STRUCTURE_OBSERVER, STRUCTURE_POWER_SPAWN, STRUCTURE_EXTRACTOR,
+	STRUCTURE_NUKER, STRUCTURE_FACTORY, STRUCTURE_INVADER_CORE,
+	// STRUCTURE_TERMINAL,   STRUCTURE_CONTROLLER,   STRUCTURE_STORAGE, // These already have room.* shortcuts to them
 ];
 
 const notRepairable: string[] = [STRUCTURE_KEEPER_LAIR, STRUCTURE_PORTAL, STRUCTURE_POWER_BANK, STRUCTURE_INVADER_CORE];
@@ -30,7 +30,7 @@ Room.prototype._refreshStructureCache = function() {
 		roomStructuresExpiration[this.name] = getCacheExpiration(STRUCTURE_TIMEOUT);
 		roomStructureIDs[this.name] = _.mapValues(_.groupBy(this.find(FIND_STRUCTURES),
 															(s: Structure) => s.structureType),
-												  (structures: Structure[]) => _.map(structures, s => s.id.toString()));
+												  (structures: Structure[]) => _.map(structures, s => s.id));
 	}
 };
 
@@ -124,7 +124,7 @@ Object.defineProperty(Room.prototype, 'repairables', {
 						repairables = repairables.concat(this[structureType + 's']);
 					}
 				}
-				roomStructureIDs[this.name].repairables = _.map(repairables, s => s.id.toString());
+				roomStructureIDs[this.name].repairables = _.map(repairables, s => s.id);
 				return this._repairables = repairables;
 			}
 		}
@@ -133,6 +133,8 @@ Object.defineProperty(Room.prototype, 'repairables', {
 	configurable: true,
 });
 
+
+// TODO: this is expensive and easy to over-use. Perhaps remove this.
 Object.defineProperty(Room.prototype, 'walkableRamparts', {
 	get() {
 		if (!this._walkableRamparts) {
@@ -143,7 +145,7 @@ Object.defineProperty(Room.prototype, 'walkableRamparts', {
 			} else {
 				const walkableRamparts = _.filter(this.ramparts,
 												  (r: StructureRampart) => r.pos.isWalkable(true));
-				roomStructureIDs[this.name].walkableRamparts = _.map(walkableRamparts, r => r.id.toString());
+				roomStructureIDs[this.name].walkableRamparts = _.map(walkableRamparts, r => r.id);
 				return this._walkableRamparts = walkableRamparts;
 			}
 		}
@@ -157,7 +159,8 @@ Object.defineProperty(Room.prototype, 'rechargeables', {
 		if (!this._rechargeables) {
 			this._rechargeables = [...this.storageUnits,
 								   ...this.droppedEnergy,
-								   ...this.tombstones];
+								   ...this.tombstones,
+								   ...this.ruins];
 		}
 		return this._rechargeables;
 	},

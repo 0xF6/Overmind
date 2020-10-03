@@ -1,5 +1,3 @@
-import {log} from '../../console/log';
-import {isRuin, isStoreStructure} from '../../declarations/typeGuards';
 import {HaulingOverlord} from '../../overlords/situational/hauler';
 import {profile} from '../../profiler/decorator';
 import {Directive} from '../Directive';
@@ -7,6 +5,8 @@ import {Directive} from '../Directive';
 
 interface DirectiveHaulMemory extends FlagMemory {
 	totalResources?: number;
+	hasDrops?: boolean;
+	// store: { [resource: string]: number };
 	path?: {
 		plain: number,
 		swamp: number,
@@ -71,18 +71,12 @@ export class DirectiveHaul extends Directive {
 		return undefined;
 	}
 
-	get store(): StoreDefinition {
+	get store(): { [resource: string]: number } {
 		if (!this._store) {
 			// Merge the "storage" of drops with the store of structure
 			let store: { [resourceType: string]: number } = {};
 			if (this.storeStructure) {
-				if (isStoreStructure(this.storeStructure)) {
-					store = this.storeStructure.store;
-				} else if (isRuin(this.storeStructure)) {
-					store = this.storeStructure.store;
-				} else {
-					store = {energy: this.storeStructure.energy};
-				}
+				store = this.storeStructure.store;
 			} else {
 				store = {energy: 0};
 			}
@@ -120,12 +114,12 @@ export class DirectiveHaul extends Directive {
 	}
 
 	run(): void {
-		if (this.pos.isVisible  && _.sum(this.store) == 0) {
+		if (this.pos.isVisible && _.sum(this.store) == 0) {
 			// If everything is picked up, crudely give enough time to bring it back
 			this._finishAtTime = this._finishAtTime || (Game.time + 300);
 		}
 		if (Game.time >= this._finishAtTime || (this.totalResources == 0 &&
-			(this.overlords.haul as HaulingOverlord).haulers.length == 0)) {
+												(this.overlords.haul as HaulingOverlord).haulers.length == 0)) {
 			// this.remove();
 		}
 	}

@@ -2,20 +2,24 @@ interface Creep {
 	hitsPredicted?: number;
 	intel?: { [property: string]: number };
 	memory: CreepMemory;
-	boosts: _ResourceConstantSansEnergy[];
+	boosts: ResourceConstant[];
 	boostCounts: { [boostType: string]: number };
 	inRampart: boolean;
+	approxMoveSpeed: number;
+	bodypartCounts: { [bodypart in BodyPartConstant]: number };
+	isHuman: true;
 }
 
 interface PowerCreep {
 	hitsPredicted?: number;
 	intel?: { [property: string]: number };
 	memory: CreepMemory;
-	fatigue: number;
-	body: BodyPartDefinition[];
-	boosts: _ResourceConstantSansEnergy[];
-	boostCounts: { [boostType: string]: number };
 	inRampart: boolean;
+	withdraw(target: Structure | Tombstone | Ruin, resourceType: ResourceConstant, amount?: number): ScreepsReturnCode;
+}
+
+interface CostMatrix {
+	_bits: Uint8Array;
 }
 
 interface ConstructionSite {
@@ -40,33 +44,52 @@ type rechargeObjectType = StructureStorage
 	| StructureContainer
 	| StructureLink
 	| Tombstone
+	| Ruin
 	| Resource;
 
 interface Room {
+
 	print: string;
+
 	my: boolean;
+
+	isColony: boolean;
 	isOutpost: boolean;
+
 	owner: string | undefined;
 	reservedByMe: boolean;
 	signedByMe: boolean;
+
 	creeps: Creep[];
-	sourceKeepers: Creep[];
 	hostiles: Creep[];
+	friendlies: Creep[];
+	invaders: Creep[];
+	sourceKeepers: Creep[];
 	dangerousHostiles: Creep[];
 	playerHostiles: Creep[];
-	invaders: Creep[];
 	dangerousPlayerHostiles: Creep[];
+
+	// Populated and tracked by RoomIntel
+	isSafe: boolean;
+	threatLevel: number;
+	instantaneousThreatLevel: 0 | 0.5 | 1;
+
 	fleeDefaults: HasPos[];
-	hostileStructures: Structure[];
+
 	structures: Structure[];
+	hostileStructures: Structure[];
+
 	flags: Flag[];
+
 	// Cached structures
 	tombstones: Tombstone[];
 	drops: { [resourceType: string]: Resource[] };
 	droppedEnergy: Resource[];
 	droppedPower: Resource[];
+
 	// Room structures
-	_refreshStructureCache;
+	_refreshStructureCache(): void;
+
 	// Multiple structures
 	spawns: StructureSpawn[];
 	extensions: StructureExtension[];
@@ -84,6 +107,7 @@ interface Room {
 	labs: StructureLab[];
 	containers: StructureContainer[];
 	powerBanks: StructurePowerBank[];
+
 	// Single structures
 	observer: StructureObserver | undefined;
 	powerSpawn: StructurePowerSpawn | undefined;
@@ -96,11 +120,14 @@ interface Room {
 	sources: Source[];
 	mineral: Mineral | undefined;
 	constructionSites: ConstructionSite[];
+	allConstructionSites: ConstructionSite[];
+	hostileConstructionSites: ConstructionSite[];
 	ruins: Ruin[];
+
 	// Used by movement library
 	// _defaultMatrix: CostMatrix;
 	// _directMatrix: CostMatrix;
-	_creepMatrix: CostMatrix;
+	// _creepMatrix: CostMatrix;
 	// _priorityMatrices: { [priority: number]: CostMatrix };
 	// _skMatrix: CostMatrix;
 	_kitingMatrix: CostMatrix;
@@ -117,13 +144,15 @@ interface RoomPosition {
 	print: string;
 	printPlain: string;
 	room: Room | undefined;
-	name: string;
-	coordName: string;
+	readableName: string;
+	// coordName: string;
 	isEdge: boolean;
 	isVisible: boolean;
 	rangeToEdge: number;
 	roomCoords: Coord;
 	neighbors: RoomPosition[];
+
+	toCoord(): Coord;
 
 	inRangeToPos(pos: RoomPosition, range: number): boolean;
 
@@ -183,6 +212,10 @@ interface RoomVisual {
 	test(): RoomVisual;
 }
 
+interface OwnedStructure {
+	_isActive(): boolean;
+}
+
 interface Structure {
 	isWalkable: boolean;
 }
@@ -233,7 +266,8 @@ interface StructureTerminal {
 	energy: any;
 	isFull: boolean;
 	isEmpty: boolean;
-	// _send(resourceType: ResourceConstant, amount: number, destination: string, description?: string): ScreepsReturnCode;
+	isReady: boolean;
+	hasReceived: boolean;
 }
 
 interface StructureTower {
@@ -251,13 +285,7 @@ interface StructureTower {
 	// preventRampartDecay(): number;
 }
 
-interface Tombstone {
-	energy: number;
-}
 
-interface Ruin {
-	energy: number;
-}
 
 interface String {
 	padRight(length: number, char?: string): string;

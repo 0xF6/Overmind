@@ -1,4 +1,5 @@
 import {Colony} from '../Colony';
+import {log} from '../console/log';
 import {Overlord} from '../overlords/Overlord';
 import {profile} from '../profiler/decorator';
 
@@ -16,16 +17,22 @@ export abstract class HiveCluster {
 	memory: any;						// Memory for the hive cluster; can be typecasted in child classes
 	overlord: Overlord | undefined;		// Overlord (singular) for the hive cluster if there is one
 
-	constructor(colony: Colony, instantiationObject: RoomObject, name: string, includePos = false) {
+	constructor(colony: Colony, instantiationObject: RoomObject, name: string) {
 		this.colony = colony;
 		this.room = instantiationObject.room!;
 		this.pos = instantiationObject.pos;
-		this.ref = includePos ? name + '@' + instantiationObject.pos.name : name + '@' + this.colony.name;
+		this.ref = name + '@' + this.colony.name;
 		this.colony.hiveClusters.push(this);
 	}
 
 	get print(): string {
 		return '<a href="#!/room/' + Game.shard.name + '/' + this.pos.roomName + '">[' + this.ref + ']</a>';
+	}
+
+	protected debug(...args: any[]) {
+		if (this.memory.debug) {
+			log.alert(this.print, args);
+		}
 	}
 
 	// Logic to refresh the state of the hive cluster between ticks

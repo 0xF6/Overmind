@@ -30,8 +30,8 @@ export class UpgradeSite extends HiveCluster {
 	// energyPerTick: number;
 
 	static settings = {
-		energyBuffer     : 100000,	// Number of upgrader parts scales with energy - this value
-		energyPerBodyUnit: 10000,	// Scaling factor: this much excess energy adds one extra body repetition
+		energyBuffer     : 100000,	// Number of upgrader parts scales with energy minus this value
+		energyPerBodyUnit: 20000,	// Scaling factor: this much excess energy adds one extra body repetition // TODO: scaling needs to increase with new storage/terminal system
 		minLinkDistance  : 10,		// Required distance to build link
 		linksRequestBelow: 200,		// Links request energy when less than this amount
 	};
@@ -108,7 +108,7 @@ export class UpgradeSite extends HiveCluster {
 					}
 				} else if (this.controller.level >= 6) {
 					// Can set a room to upgrade at an accelerated rate manually
-					upgradePower = this.memory.speedFactor != undefined ? upgradePower*this.memory.speedFactor : upgradePower;
+					upgradePower = this.memory.speedFactor != undefined ? upgradePower * this.memory.speedFactor : upgradePower;
 				}
 				return upgradePower;
 			} else {
@@ -134,7 +134,9 @@ export class UpgradeSite extends HiveCluster {
 		}
 	}
 
-	/* Calculate where the input will be built for this site */
+	/**
+	 * Calculate where the input will be built for this site
+	 */
 	private calculateBatteryPos(): RoomPosition | undefined {
 		let originPos: RoomPosition | undefined;
 		if (this.colony.storage) {
@@ -162,7 +164,9 @@ export class UpgradeSite extends HiveCluster {
 		}
 	}
 
-	/* Build a container output at the optimal location */
+	/**
+	 * Build a container output at the optimal location
+	 */
 	private buildBatteryIfMissing(): void {
 		if (!this.battery && !this.findInputConstructionSite()) {
 			const buildHere = this.batteryPos;

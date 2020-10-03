@@ -5,6 +5,7 @@ import {DirectiveColonize} from './colony/colonize';
 import {DirectiveIncubate} from './colony/incubate';
 import {DirectiveOutpost} from './colony/outpost';
 import {DirectiveSKOutpost} from './colony/outpostSK';
+import {DirectivePoisonRoom} from './colony/poisonRoom';
 import {DirectiveGuard} from './defense/guard';
 import {DirectiveInvasionDefense} from './defense/invasionDefense';
 import {DirectiveOutpostDefense} from './defense/outpostDefense';
@@ -24,11 +25,12 @@ import {DirectiveRPHatchery} from './roomPlanner/roomPlanner_hatchery';
 import {DirectiveBootstrap} from './situational/bootstrap';
 import {DirectiveNukeResponse} from './situational/nukeResponse';
 import {DirectiveNukeTarget} from './situational/nukeTarget';
+import {DirectivePortalScout} from './situational/portalScout';
+import {DirectiveRemoteUpgrade} from './situational/remoteUpgrade';
 import {DirectiveStronghold} from './situational/stronghold';
 import {DirectiveDismantle} from './targeting/dismantle';
 import {DirectiveModularDismantle} from './targeting/modularDismantle';
 import {DirectiveTargetSiege} from './targeting/siegeTarget';
-import {DirectiveTerminalEmergencyState} from './terminalState/terminalState_emergency';
 import {DirectiveTerminalEvacuateState} from './terminalState/terminalState_evacuate';
 import {DirectiveTerminalRebuildState} from './terminalState/terminalState_rebuild';
 
@@ -52,6 +54,8 @@ export function DirectiveWrapper(flag: Flag): Directive | undefined {
 					return new DirectiveColonize(flag);
 				case COLOR_ORANGE:
 					return new DirectiveClearRoom(flag);
+				case COLOR_RED:
+					return new DirectivePoisonRoom(flag);
 			}
 			break;
 
@@ -92,6 +96,10 @@ export function DirectiveWrapper(flag: Flag): Directive | undefined {
 					return new DirectiveNukeTarget(flag);
 				case COLOR_PURPLE:
 					return new DirectiveStronghold(flag);
+				case COLOR_WHITE:
+					return new DirectivePortalScout(flag);
+				case COLOR_YELLOW:
+					return new DirectiveRemoteUpgrade(flag);
 			}
 			break;
 
@@ -114,8 +122,8 @@ export function DirectiveWrapper(flag: Flag): Directive | undefined {
 			switch (flag.secondaryColor) {
 				case COLOR_RED:
 					return new DirectiveTerminalEvacuateState(flag);
-				case COLOR_ORANGE:
-					return new DirectiveTerminalEmergencyState(flag);
+				// case COLOR_ORANGE:
+				// 	return new DirectiveTerminalEmergencyState(flag);
 				case COLOR_YELLOW:
 					return new DirectiveTerminalRebuildState(flag);
 			}

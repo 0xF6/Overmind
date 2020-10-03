@@ -1,8 +1,6 @@
-import {ColonyStage} from '../../Colony';
 import {CombatIntel} from '../../intel/CombatIntel';
 import {BunkerDefenseOverlord} from '../../overlords/defense/bunkerDefense';
 import {DistractionOverlord} from '../../overlords/defense/distraction';
-import {MeleeDefenseOverlord} from '../../overlords/defense/meleeDefense';
 import {RangedDefenseOverlord} from '../../overlords/defense/rangedDefense';
 import {profile} from '../../profiler/decorator';
 import {BarrierPlanner} from '../../roomPlanner/BarrierPlanner';
@@ -11,7 +9,6 @@ import {NotifierPriority} from '../Notifier';
 
 interface DirectiveInvasionDefenseMemory extends FlagMemory {
 	persistent?: boolean;
-	created: number;
 	safeSince: number;
 }
 
@@ -43,28 +40,26 @@ export class DirectiveInvasionDefense extends Directive {
 		const expectedDamage = CombatIntel.maxDamageByCreeps(this.room.dangerousPlayerHostiles);
 		const expectedHealing = CombatIntel.maxHealingByCreeps(this.room.dangerousPlayerHostiles);
 		const useBoosts = (expectedDamage > ATTACK_POWER * 50) || (expectedHealing > RANGED_ATTACK_POWER * 100)
-						&& !!this.colony.terminal
-						&& !!this.colony.evolutionChamber;
+						  && !!this.colony.terminal
+						  && !!this.colony.evolutionChamber;
 		const percentWalls = _.filter(this.room.barriers, s => s.structureType == STRUCTURE_WALL).length /
 							 this.room.barriers.length;
 		const meleeHostiles = _.filter(this.room.hostiles, hostile => hostile.getActiveBodyparts(ATTACK) > 0 ||
 																	  hostile.getActiveBodyparts(WORK) > 0);
 		const rangedHostiles = _.filter(this.room.hostiles, hostile => hostile.getActiveBodyparts(RANGED_ATTACK) > 0);
-		if (meleeHostiles.length > 0 && expectedDamage > 40*ATTACK_POWER || rangedHostiles.length >= 3) {
-			this.overlords.bunkerDefense = new BunkerDefenseOverlord(this, true);
-			this.overlords.distraction = new DistractionOverlord(this);
-		}
-		if (this.colony.stage > ColonyStage.Larva) {
-			this.overlords.rangedDefense = new RangedDefenseOverlord(this, useBoosts);
-			// DirectivePairDestroy.createIfNotPresent(this.pos, 'room');
-		} else {
-			this.overlords.meleeDefense = new MeleeDefenseOverlord(this, useBoosts);
-		}
+
+		this.overlords.rangedDefense = new RangedDefenseOverlord(this);
+
 		// If serious bunker busting attempt, spawn lurkers
 		// TODO understand dismantlers damage output
 		if (meleeHostiles.length > 0 && expectedDamage > ATTACK_POWER * 70 &&
-			this.colony.level >= BarrierPlanner.settings.bunkerizeRCL) {
-			this.overlords.bunkerDefense = new BunkerDefenseOverlord(this, false);
+			(this.colony.level >= BarrierPlanner.settings.bunkerizeRCL || rangedHostiles.length > 3)) {
+			this.overlords.bunkerDefense = new BunkerDefenseOverlord(this);
+		}
+		// If melee attackers, try distractions
+		// TODO drop these if they don't work, need to detect effectiveness. Although the says make for great 🍿
+		if (meleeHostiles.length > 0 && expectedDamage > 40 * ATTACK_POWER) {
+			this.overlords.distraction = new DistractionOverlord(this);
 		}
 	}
 
@@ -84,8 +79,8 @@ export class DirectiveInvasionDefense extends Directive {
 			if (!mem[creep.owner.username]) {
 				mem[creep.owner.username] = {
 					creeps: {},
-					types: {},
-					parts: {},
+					types : {},
+					parts : {},
 					boosts: {},
 				};
 			}
@@ -97,11 +92,11 @@ export class DirectiveInvasionDefense extends Directive {
 					// memory protection if they don't split name
 					return;
 				}
-				playerMem.types[creepType] = (playerMem.types[creepType]+1) || 1;
+				playerMem.types[creepType] = (playerMem.types[creepType] + 1) || 1;
 				for (const bodyPart of creep.body) {
-					playerMem.parts[bodyPart.type] = (playerMem.parts[bodyPart.type])+1 || 1;
+					playerMem.parts[bodyPart.type] = (playerMem.parts[bodyPart.type]) + 1 || 1;
 					if (bodyPart.boost) {
-						playerMem.boosts[bodyPart.boost] = (playerMem.boosts[bodyPart.boost])+1 || 1;
+						playerMem.boosts[bodyPart.boost] = (playerMem.boosts[bodyPart.boost]) + 1 || 1;
 					}
 				}
 			}
@@ -114,15 +109,15 @@ export class DirectiveInvasionDefense extends Directive {
 		const mem = Memory.playerCreepTracker.inakrin;
 		for (const boostid in mem.boosts) {
 			const boost = mem.boosts[boostid];
-			console.log(`${boostid} : ${boost*30}`);
-			t3Count+=boost*30;
-			energyCount+=20;
+			console.log(`${boostid} : ${boost * 30}`);
+			t3Count += boost * 30;
+			energyCount += 20;
 		}
 		for (const partType in mem.parts) {
 			const partCount = mem.parts[partType];
 			const cost = BODYPART_COST[(partType as BodyPartConstant)];
 			console.log(`${partType} : ${cost * partCount}`);
-			energyCount+=cost * partCount;
+			energyCount += cost * partCount;
 		}
 
 		console.log(`Total T3 Cost: ${t3Count}`);

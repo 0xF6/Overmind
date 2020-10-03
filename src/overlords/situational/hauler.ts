@@ -1,12 +1,10 @@
 import {log} from '../../console/log';
 import {Roles, Setups} from '../../creepSetups/setups';
-import {isRuin, isStoreStructure} from '../../declarations/typeGuards';
 import {DirectiveHaul} from '../../directives/resource/haul';
 import {Energetics} from '../../logistics/Energetics';
 import {Pathing} from '../../movement/Pathing';
 import {OverlordPriority} from '../../priorities/priorities_overlords';
 import {profile} from '../../profiler/decorator';
-import {Task} from '../../tasks/Task';
 import {Tasks} from '../../tasks/Tasks';
 import {Zerg} from '../../zerg/Zerg';
 import {Overlord} from '../Overlord';
@@ -36,10 +34,10 @@ export class HaulingOverlord extends Overlord {
 		// Spawn a number of haulers sufficient to move all resources within a lifetime, up to a max
 		const MAX_HAULERS = 5;
 		// Calculate total needed amount of hauling power as (resource amount * trip distance)
-		const tripDistance = 2 * Pathing.distance((this.colony.storage || this.colony).pos, this.directive.pos);
+		const tripDistance = 2 * (Pathing.distance((this.colony.storage || this.colony).pos, this.directive.pos) || 0);
 		const haulingPowerNeeded = Math.min(this.directive.totalResources,
-										  this.colony.storage.storeCapacity
-										  - _.sum(this.colony.storage.store)) * tripDistance;
+											this.colony.storage.storeCapacity
+											- _.sum(this.colony.storage.store)) * tripDistance;
 		// Calculate amount of hauling each hauler provides in a lifetime
 		const haulerCarryParts = Setups.transporters.early.getBodyPotential(CARRY, this.colony);
 		const haulingPowerPerLifetime = CREEP_LIFE_TIME * haulerCarryParts * CARRY_CAPACITY;
@@ -64,12 +62,7 @@ export class HaulingOverlord extends Overlord {
 				}
 				// Withdraw from store structure
 				if (this.directive.storeStructure) {
-					let store: { [resourceType: string]: number } = {};
-					if (isStoreStructure(this.directive.storeStructure) || isRuin(this.directive.storeStructure)) {
-						store = this.directive.storeStructure.store;
-					} else {
-						store = {energy: this.directive.storeStructure.energy};
-					}
+					const store = this.directive.store!;
 					let totalDrawn = 0; // Fill to full
 					for (const resourceType in store) {
 						if (store[resourceType] > 0) {
@@ -94,7 +87,7 @@ export class HaulingOverlord extends Overlord {
 				log.warning(`${hauler.name} in ${hauler.room.print}: nothing to collect!`);
 			} else {
 				// hauler.task = Tasks.goTo(this.directive);
-				hauler.goTo(this.directive, {avoidSK: true});
+				hauler.goTo(this.directive, {pathOpts: {avoidSK: true}});
 			}
 		} else {
 			// Travel to colony room and deposit resources
@@ -136,6 +129,7 @@ export class HaulingOverlord extends Overlord {
 			}
 			hauler.run();
 		}
+		// TODO: fix the way this is done
 		if (this.directive.memory.totalResources == 0 && this.haulers.filter(hauler => _.sum(hauler.carry) > 0).length == 0) {
 			this.directive.remove();
 		}

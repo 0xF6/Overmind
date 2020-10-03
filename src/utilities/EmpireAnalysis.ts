@@ -1,14 +1,6 @@
 import {getAllColonies} from '../Colony';
-import {log} from '../console/log';
 import {DirectiveSKOutpost} from '../directives/colony/outpostSK';
-import {Directive} from '../directives/Directive';
-import {Overseer} from '../Overseer';
 import {profile} from '../profiler/decorator';
-
-export const ROOMTYPE_SOURCEKEEPER = 'SK';
-export const ROOMTYPE_CORE = 'CORE';
-export const ROOMTYPE_CONTROLLER = 'CTRL';
-export const ROOMTYPE_ALLEY = 'ALLEY';
 
 /**
  * Empire: Utilities on analyzing the overall empire
@@ -16,11 +8,11 @@ export const ROOMTYPE_ALLEY = 'ALLEY';
 @profile
 export class EmpireAnalysis {
 
-	static empireMineralDistribution(): {[mineralType: string]: number} {
+	static empireMineralDistribution(): { [mineralType: string]: number } {
 		const colonies = getAllColonies();
 		const minedSKRooms = DirectiveSKOutpost.find(Object.values(Game.flags));
 
-		const mineralDistribution: {[mineralType: string]: number} = {};
+		const mineralDistribution: { [mineralType: string]: number } = {};
 
 		for (const colony of colonies) {
 			const mineral = colony.room.find(FIND_MINERALS)[0];
@@ -40,8 +32,6 @@ export class EmpireAnalysis {
 			}
 			mineralDistribution[mineral.mineralType] += 1;
 		}
-
 		return mineralDistribution;
 	}
-
 }

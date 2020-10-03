@@ -19,10 +19,13 @@ export class TaskReserve extends Task {
 
 	isValidTarget() {
 		const target = this.target;
-		return (target != null && (!target.reservation || target.reservation.ticksToEnd < 4999 ));
+		return (target != null && (!target.reservation || target.reservation.ticksToEnd < 4999));
 	}
 
 	work() {
+		if (this.target != null && !!this.target.reservation && !this.target.reservedByMe) {
+			this.creep.attackController(this.target);
+		}
 		return this.creep.reserveController(this.target);
 	}
 }

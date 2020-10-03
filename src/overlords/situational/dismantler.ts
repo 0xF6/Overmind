@@ -1,10 +1,10 @@
 import {log} from '../../console/log';
-import {CombatSetups, Roles, Setups} from '../../creepSetups/setups';
+import {CombatSetups, Roles} from '../../creepSetups/setups';
 import {DirectiveModularDismantle} from '../../directives/targeting/modularDismantle';
 import {Pathing} from '../../movement/Pathing';
 import {OverlordPriority} from '../../priorities/priorities_overlords';
 import {profile} from '../../profiler/decorator';
-import {boostResources} from '../../resources/map_resources';
+import {BOOST_TIERS} from '../../resources/map_resources';
 import {Zerg} from '../../zerg/Zerg';
 import {Overlord} from '../Overlord';
 
@@ -20,37 +20,36 @@ export class DismantleOverlord extends Overlord {
 
 	requiredRCL: 4;
 
-	constructor(directive: DirectiveModularDismantle, target?: Structure, priority
-		= OverlordPriority.tasks.dismantle, boosted  = false) {
+	constructor(directive: DirectiveModularDismantle, priority = OverlordPriority.tasks.dismantle) {
 		super(directive, 'dismantle', priority);
 		this.directive = directive;
 		// this.target = target || Game.getObjectById(this.directive.memory.targetId) || undefined;
-		this.dismantlers = this.zerg(Roles.dismantler, {
-			boostWishlist: boosted ? [boostResources.tough[3], boostResources.dismantle[3],
-				boostResources.move[3]] : undefined
-		});
+		this.dismantlers = this.zerg(Roles.dismantler);
 	}
 
 	init() {
 		// Spawn a number of dismantlers, up to a max
 		const MAX_DISMANTLERS = 2;
 		let setup;
-		if (!!this.directive.memory.attackInsteadOfDismantle) {
+		if (!!this.directive.memory.attackInsteadOfDismantle) { // TODO: need to move this to the new CombatCreepSetup system
 			setup = CombatSetups.dismantlers.attackDismantlers;
-		} else if (this.canBoostSetup(CombatSetups.dismantlers.boosted_T3)) {
-			setup = CombatSetups.dismantlers.boosted_T3;
-		} else {
+		}
+		// else if (this.canBoostSetup(CombatSetups.dismantlers.boosted_T3)) {
+		// 	setup = CombatSetups.dismantlers.boosted_T3;
+		// }
+		else {
 			setup = CombatSetups.dismantlers.default;
 		}
+		setup = CombatSetups.dismantlers.default;
 		const dismantlingParts = setup.getBodyPotential(!!this.directive.memory.attackInsteadOfDismantle
-			? ATTACK : WORK, this.colony);
+														? ATTACK : WORK, this.colony);
 		const dismantlingPower = dismantlingParts * (!!this.directive.memory.attackInsteadOfDismantle
-			? ATTACK_POWER : DISMANTLE_POWER);
+													 ? ATTACK_POWER : DISMANTLE_POWER);
 		// Calculate total needed amount of dismantling power as (resource amount * trip distance)
-		const tripDistance = Pathing.distance((this.colony).pos, this.directive.pos);
-		const dismantleLifetimePower = (CREEP_LIFE_TIME-tripDistance)*dismantlingPower;
+		const tripDistance = Pathing.distance((this.colony).pos, this.directive.pos) || 0;
+		const dismantleLifetimePower = (CREEP_LIFE_TIME - tripDistance) * dismantlingPower;
 		// Calculate number of dismantlers
-		if (this.directive.room && this.target && ! this.directive.memory.numberSpots) {
+		if (this.directive.room && this.target && !this.directive.memory.numberSpots) {
 			this.directive.getDismantleSpots(this.target.pos);
 		}
 		const nearbySpots = this.directive.memory.numberSpots != undefined ? this.directive.memory.numberSpots : 1;
@@ -65,7 +64,7 @@ export class DismantleOverlord extends Overlord {
 	private runDismantler(dismantler: Zerg) {
 		if (!dismantler.inSameRoomAs(this.directive)) {
 			const goal = this.target || this.directive;
-			dismantler.goTo(goal, {avoidSK: true});
+			dismantler.goTo(goal, {pathOpts:{avoidSK: true}});
 		} else {
 			if (!this.target) {
 				if (this.directive.memory.targetId) {
@@ -77,7 +76,7 @@ export class DismantleOverlord extends Overlord {
 				}
 			} else {
 				const res = !!this.directive.memory.attackInsteadOfDismantle ? dismantler.attack(this.target)
-					: dismantler.dismantle(this.target);
+																			 : dismantler.dismantle(this.target);
 				if (res == ERR_NOT_IN_RANGE) {
 					const ret = dismantler.goTo(this.target, {});
 					// TODO this is shit ⬇

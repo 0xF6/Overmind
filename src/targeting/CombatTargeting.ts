@@ -1,5 +1,6 @@
 import {log} from '../console/log';
 import {CombatIntel} from '../intel/CombatIntel';
+import {MatrixLib} from '../matrix/MatrixLib';
 import {Pathing} from '../movement/Pathing';
 import {AttackStructurePriorities, AttackStructureScores} from '../priorities/priorities_structures';
 import {profile} from '../profiler/decorator';
@@ -118,23 +119,25 @@ export class CombatTargeting {
 	 * Finds the best (friendly) target in range that a zerg can currently heal
 	 */
 	static findBestHealingTargetInRange(healer: Zerg, range = 3, friendlies = healer.room.creeps): Creep | undefined {
+		const tempHitsPredicted: { [id: string]: number } = {};
 		return maxBy(_.filter(friendlies, f => healer.pos.getRangeTo(f) <= range), friend => {
 			if (friend.hitsPredicted == undefined) friend.hitsPredicted = friend.hits;
 			const attackProbability = 0.5;
-			// TODO need to only calculate this once per tick, can't trigger multiple times. This isn't correctly calcing
+			tempHitsPredicted[friend.id] = friend.hitsPredicted;
 			for (const hostile of friend.pos.findInRange(friend.room.hostiles, 3)) {
-				if (hostile.pos.isNearTo(friend)) {
-					friend.hitsPredicted -= attackProbability * CombatIntel.getAttackDamage(hostile);
-				} else {
-					friend.hitsPredicted -= attackProbability * (CombatIntel.getAttackDamage(hostile)
-																 + CombatIntel.getRangedAttackDamage(hostile));
+				if (!friend.inRampart) {
+					if (hostile.pos.isNearTo(friend)) {
+						tempHitsPredicted[friend.id] -= attackProbability * CombatIntel.getAttackDamage(hostile);
+					} else {
+						tempHitsPredicted[friend.id] -= attackProbability * CombatIntel.getRangedAttackDamage(hostile);
+					}
 				}
 			}
-			const healScore = friend.hitsMax - friend.hitsPredicted;
+			const missingHits = friend.hitsMax - tempHitsPredicted[friend.id];
 			if (healer.pos.getRangeTo(friend) > 1) {
-				return healScore + CombatIntel.getRangedHealAmount(healer.creep);
+				return Math.min(missingHits, CombatIntel.getRangedHealAmount(healer.creep));
 			} else {
-				return healScore + CombatIntel.getHealAmount(healer.creep);
+				return Math.min(missingHits, CombatIntel.getHealAmount(healer.creep));
 			}
 		});
 	}
@@ -311,14 +314,13 @@ export class CombatTargeting {
 			swampCost   : 2,
 			roomCallback: rn => {
 				if (rn != roomName) return false;
-				const matrix = Pathing.getSwarmTerrainMatrix(roomName, swarm.width, swarm.height).clone();
+
+				const matrix = MatrixLib.getSwarmTerrainMatrix(roomName, {plainCost: 1, swampCost: 5},
+															   swarm.width, swarm.height);
 				for (const barrier of room.barriers) {
 					const randomFactor = Math.min(Math.round(randomness * Math.random()), 100);
 					const cost = 100 + Math.round((barrier.hits / maxWallHits) * 100) + randomFactor;
-					const setPositions = Pathing.getPosWindow(barrier.pos, -swarm.width, -swarm.height);
-					for (const pos of setPositions) {
-						matrix.set(pos.x, pos.y, Math.max(cost, matrix.get(pos.x, pos.y)));
-					}
+					MatrixLib.setToMaxCostAfterMaxPooling(matrix, [barrier], swarm.width, swarm.height, cost);
 				}
 				if (displayCostMatrix) {
 					Visualizer.displayCostMatrix(matrix, roomName);

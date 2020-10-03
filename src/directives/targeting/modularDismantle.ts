@@ -14,6 +14,7 @@ interface DirectiveModularDismantleMemory extends FlagMemory {
 	additionalTargets?: StructureConstant[];
 	boost?: boolean;
 }
+
 /**
  * Register a target to be dismantled by specific dismantlers
  */
@@ -32,7 +33,7 @@ export class DirectiveModularDismantle extends Directive {
 		if (this.flag.room) {
 			if (!this.memory.targetId) {
 				const target = this.getTarget();
-				this.memory.targetId = target ? target.id.toString() : undefined;
+				this.memory.targetId = target ? target.id : undefined;
 			}
 			this.memory.additionalTargets = additionalTargets;
 			if (!this.memory.numberSpots) {
@@ -45,7 +46,7 @@ export class DirectiveModularDismantle extends Directive {
 	}
 
 	spawnMoarOverlords() {
-		this.overlords.dismantle = new DismantleOverlord(this, undefined, undefined, this.memory.boost);
+		this.overlords.dismantle = new DismantleOverlord(this);
 	}
 
 	getTarget(): Structure | undefined {
@@ -92,7 +93,7 @@ export class DirectiveModularDismantle extends Directive {
 	init(): void {
 		let hits = '???';
 		const target = this.getTarget();
-		hits = target ? (target.hits/1000).toString()+'K' : hits;
+		hits = target ? (target.hits / 1000).toString() + 'K' : hits;
 		this.alert(`Dismantling: ${hits}`);
 	}
 
