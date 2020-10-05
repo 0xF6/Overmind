@@ -3,25 +3,38 @@ import {Colony} from '../Colony';
 import {log} from '../console/log';
 import {Mem} from '../memory/Memory';
 import {profile} from '../profiler/decorator';
-import {derefCoords, minMax} from '../utilities/utils';
+import {packCoord, packCoordList, unpackCoordListAsPosList} from '../utilities/packrat';
+import {minMax} from '../utilities/utils';
 import {BUNKER_RADIUS, bunkerLayout, insideBunkerBounds} from './layouts/bunker';
 import {getAllStructureCoordsFromLayout, RoomPlanner, translatePositions} from './RoomPlanner';
 
 export interface BarrierPlannerMemory {
-	barrierLookup: { [roadCoordName: string]: boolean | undefined };
+	barrierCoordsPacked: string;
 }
 
-const memoryDefaults = {
-	barrierLookup: {},
-};
+export interface BarrierWallPlannerMemory {
+	wallCoordsPacked: string;
+	visual: boolean;
+}
+
+const getDefaultBarrierPlannerMemory: () => BarrierPlannerMemory = () => ({
+	barrierCoordsPacked: '',
+});
+const getDefaultBarrierWallPlannerMemory: () => BarrierWallPlannerMemory = () => ({
+	wallCoordsPacked: '',
+	visual: false
+});
 
 @profile
 export class BarrierPlanner {
 
-	roomPlanner: RoomPlanner;
-	colony: Colony;
-	memory: BarrierPlannerMemory;
-	barrierPositions: RoomPosition[];
+	private colony: Colony;
+	private memory: BarrierPlannerMemory;
+	private memoryWalls: BarrierWallPlannerMemory;
+	private roomPlanner: RoomPlanner;
+	private barrierPositions: RoomPosition[];
+	private wallPlugPositions: RoomPosition[];
+	private _barrierLookup: ((pos: RoomPosition) => boolean) | undefined;
 
 	static settings = {
 		buildBarriersAtRCL: 3,
@@ -32,13 +45,17 @@ export class BarrierPlanner {
 	constructor(roomPlanner: RoomPlanner) {
 		this.roomPlanner = roomPlanner;
 		this.colony = roomPlanner.colony;
-		this.memory = Mem.wrap(this.colony.memory, 'barrierPlanner', memoryDefaults);
+		this.memory = Mem.wrap(this.colony.memory, 'barrierPlanner', getDefaultBarrierPlannerMemory);
+		this.memoryWalls = Mem.wrap(this.colony.memory, 'barrierWallPlanner', getDefaultBarrierWallPlannerMemory);
 		this.barrierPositions = [];
+		this.wallPlugPositions = [];
 	}
 
 	refresh(): void {
-		this.memory = Mem.wrap(this.colony.memory, 'barrierPlanner', memoryDefaults);
+		this.memory = Mem.wrap(this.colony.memory, 'barrierPlanner', getDefaultBarrierPlannerMemory);
+		this.memoryWalls = Mem.wrap(this.colony.memory, 'barrierWallPlanner', getDefaultBarrierWallPlannerMemory);
 		this.barrierPositions = [];
+		this.wallPlugPositions = [];
 	}
 
 	private computeBunkerBarrierPositions(bunkerPos: RoomPosition, upgradeSitePos: RoomPosition): RoomPosition[] {
@@ -61,6 +78,20 @@ export class BarrierPlanner {
 		let positions = _.map(barrierCoords, coord => new RoomPosition(coord.x, coord.y, this.colony.name));
 		positions = positions.concat(upgradeSitePos.availableNeighbors(true));
 		return positions;
+	}
+
+	private getWallBarrierPositions(): RoomPosition[] {
+		let posed: RoomPosition[] = [];
+		for (const flag of this.colony.flags) {
+			if (!this.isWallFlag(flag))
+				continue;
+			posed.push(flag.pos);
+		}
+		return posed;
+	}
+
+	private isWallFlag(flag: Flag): boolean {
+		return flag.color === COLOR_GREY && flag.secondaryColor === COLOR_WHITE;
 	}
 
 	private computeBarrierPositions(hatcheryPos: RoomPosition, commandCenterPos: RoomPosition,
@@ -96,7 +127,6 @@ export class BarrierPlanner {
 
 	/* Write everything to memory after roomPlanner is closed */
 	finalize(): void {
-		this.memory.barrierLookup = {};
 		if (this.barrierPositions.length == 0) {
 			if (this.roomPlanner.bunkerPos) {
 				this.barrierPositions = this.computeBunkerBarrierPositions(this.roomPlanner.bunkerPos,
@@ -106,26 +136,48 @@ export class BarrierPlanner {
 																	 this.roomPlanner.storagePos,
 																	 this.colony.controller.pos);
 			} else {
-				log.error(`Couldn't generate barrier plan for ${this.colony.name}!`);
+				log.error(`${this.colony.print} BARRIER PLANNER: couldn't generate barrier plan!`);
+				return;
 			}
 		}
-		for (const pos of this.barrierPositions) {
-			this.memory.barrierLookup[pos.coordName] = true;
-		}
+		this.memory.barrierCoordsPacked = packCoordList(this.barrierPositions);
 	}
 
+	wallShouldBeHere(pos: RoomPosition): boolean {
+		for (const flag of this.colony.flags) {
+			if (!this.isWallFlag(flag))
+				continue;
+			if (flag.pos.x === pos.x && flag.pos.y === pos.y)
+				return true;
+		}
+		return false;
+	}
 	/* Quick lookup for if a barrier should be in this position. Barriers returning false won't be maintained. */
 	barrierShouldBeHere(pos: RoomPosition): boolean {
-		if (this.colony.layout == 'bunker') {
-			if (this.colony.level >= BarrierPlanner.settings.bunkerizeRCL) {
-				// Once you are high level, only maintain ramparts at bunker or controller
-				return insideBunkerBounds(pos, this.colony) || pos.getRangeTo(this.colony.controller) == 1;
-			} else {
-				// Otherwise keep the normal plan up
-				return !!this.memory.barrierLookup[pos.coordName] || pos.getRangeTo(this.colony.controller) == 1;
+		// Once you are high level, only maintain ramparts at bunker or controller
+		if (this.colony.layout == 'bunker' && this.colony.level >= BarrierPlanner.settings.bunkerizeRCL) {
+			return insideBunkerBounds(pos, this.colony) || pos.getRangeTo(this.colony.controller) == 1;
+		}
+		// Otherwise look up from memory
+		if (this._barrierLookup == undefined) {
+			this._barrierLookup = _.memoize((p: RoomPosition) =>
+												this.memory.barrierCoordsPacked.includes(packCoord(p)));
+		}
+		return this._barrierLookup(pos);
+	}
+
+	public buildMissingWalls(): void {
+		const wallPositions = unpackCoordListAsPosList(this.memoryWalls.wallCoordsPacked, this.colony.room.name);
+		for (const pos of wallPositions) {
+			if (!RoomPlanner.canBuild(STRUCTURE_WALL, pos) && !this.wallShouldBeHere(pos)) {
+				continue;
 			}
-		} else {
-			return !!this.memory.barrierLookup[pos.coordName] || pos.getRangeTo(this.colony.controller) == 1;
+			if (this.colony.room.walls.filter(x => x.pos === pos))
+				continue;
+			const ret = pos.createConstructionSite(STRUCTURE_WALL);
+			if (ret != OK) {
+				log.warning(`${this.colony.name}: couldn't create wall site at ${pos.print}. Result: ${ret}`);
+			}
 		}
 	}
 
@@ -135,10 +187,7 @@ export class BarrierPlanner {
 		let count = RoomPlanner.settings.maxSitesPerColony - this.colony.constructionSites.length;
 
 		// Build missing ramparts
-		const barrierPositions: RoomPosition[] = [];
-		for (const coord of _.keys(this.memory.barrierLookup)) {
-			barrierPositions.push(derefCoords(coord, this.colony.name));
-		}
+		const barrierPositions = unpackCoordListAsPosList(this.memory.barrierCoordsPacked, this.colony.room.name);
 
 		// Add critical structures to barrier lookup
 		const criticalStructures: Structure[] = _.compact([...this.colony.towers,
@@ -181,6 +230,14 @@ export class BarrierPlanner {
 		}
 	}
 
+
+
+	public refreshWallPositions() {
+		let posed = this.getWallBarrierPositions();
+		this.memoryWalls.wallCoordsPacked = packCoordList(posed);
+		log.info(`${this.colony.name}: walls has refreshed. [${posed.length}]`);
+	}
+
 	run(): void {
 		if (this.roomPlanner.active) {
 			if (this.roomPlanner.bunkerPos) {
@@ -206,6 +263,9 @@ export class BarrierPlanner {
 	visuals(): void {
 		for (const pos of this.barrierPositions) {
 			this.colony.room.visual.structure(pos.x, pos.y, STRUCTURE_RAMPART);
+		}
+		for (const wall_p of this.wallPlugPositions) {
+			this.colony.room.visual.structure(wall_p.x, wall_p.y, STRUCTURE_WALL);
 		}
 	}
 
