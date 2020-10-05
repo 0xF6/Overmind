@@ -113,6 +113,14 @@ export class SporeCrawler extends HiveCluster {
 				}
 				return;
 			}
+			const dyingWalls = _.filter(this.room.walls, wall => wall.hits < WorkerOverlord.settings.barrierHits.critical
+				&& this.colony.roomPlanner.barrierPlanner.wallShouldBeHere(wall.pos));
+			if (dyingWalls.length > 0) {
+				for (const tower of this.towers) {
+					tower.repair(tower.pos.findClosestByRange(dyingWalls)!);
+				}
+				return;
+			}
 			// repair roads
 			if (includeRoads) {
 				const decayingRoads = _.filter(this.room.roads, road => road.hits < 0.2 * road.hitsMax);

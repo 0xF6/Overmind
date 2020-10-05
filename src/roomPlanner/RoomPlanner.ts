@@ -525,6 +525,8 @@ export class RoomPlanner {
 			return this.roadShouldBeHere(pos);
 		} else if (structureType == STRUCTURE_RAMPART) {
 			return this.barrierPlanner.barrierShouldBeHere(pos);
+		} else if (structureType == STRUCTURE_WALL) {
+			return this.barrierPlanner.wallShouldBeHere(pos);
 		} else if (structureType == STRUCTURE_EXTRACTOR) {
 			return pos.lookFor(LOOK_MINERALS).length > 0;
 		} else {
@@ -550,7 +552,10 @@ export class RoomPlanner {
 	 * Demolish all hostile structures in the room
 	 */
 	private demolishHostileStructures(destroyStorageUnits = false) {
-		_.forEach(this.colony.room.walls, wall => wall.destroy()); // overmind never uses walls
+		for (const wall of this.colony.room.walls) {
+			if (!this.barrierPlanner.wallShouldBeHere(wall.pos))
+				wall.destroy();
+		}
 		for (const structure of _.filter(this.colony.room.hostileStructures)) {
 			if ((structure.structureType != STRUCTURE_STORAGE && structure.structureType != STRUCTURE_TERMINAL)
 				|| destroyStorageUnits) {

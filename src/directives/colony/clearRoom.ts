@@ -88,6 +88,8 @@ export class DirectiveClearRoom extends Directive {
 				if (keepContainers && s.structureType == STRUCTURE_CONTAINER) {
 					continue;
 				}
+				if (s.structureType == STRUCTURE_WALL)
+					continue;
 				const result = s.destroy();
 				if (result == OK) {
 					i++;

@@ -53,7 +53,7 @@ export class WorkerOverlord extends Overlord {
 		this.fortifyBarriers = $.structures(this, 'fortifyBarriers', () =>
 			_.sortBy(_.filter(this.room.barriers, s =>
 				s.hits < WorkerOverlord.settings.barrierHits[this.colony.level]
-				&& this.colony.roomPlanner.barrierPlanner.barrierShouldBeHere(s.pos)
+				&& (this.colony.roomPlanner.barrierPlanner.barrierShouldBeHere(s.pos) || this.colony.roomPlanner.barrierPlanner.wallShouldBeHere(s.pos))
 			), s => s.hits), 25);
 		this.criticalBarriers = $.structures(this, 'criticalBarriers', () =>
 			_.filter(this.fortifyBarriers,
