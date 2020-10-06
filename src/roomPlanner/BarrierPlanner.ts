@@ -235,7 +235,6 @@ export class BarrierPlanner {
 	public refreshWallPositions() {
 		let posed = this.getWallBarrierPositions();
 		this.memoryWalls.wallCoordsPacked = packCoordList(posed);
-		log.info(`${this.colony.name}: walls has refreshed. [${posed.length}]`);
 	}
 
 	run(): void {
