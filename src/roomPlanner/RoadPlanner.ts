@@ -47,7 +47,7 @@ export class RoadPlanner {
 		encourageRoadMerging          : true,
 		recalculateRoadNetworkInterval: onPublicServer() ? 1000 : 250, // recalculate road networks this often
 		recomputeCoverageInterval     : onPublicServer() ? 1000 : 500,	// recompute coverage to each destination this often
-		buildRoadsAtRCL               : 4,
+		buildRoadsAtRCL               : 3,
 	};
 
 	constructor(roomPlanner: RoomPlanner) {
