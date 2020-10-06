@@ -217,7 +217,7 @@ let _Overmind = class _Overmind {
             this["overseer"][a0_0x1a16('0x18')][a0_0x1a16('0x42')](a0_0x1a16('0x99'), _0x641683, NotifierPriority[a0_0x1a16('0x44')]);
         }
     }["visuals"]() {
-        if (Game[a0_0x1a16('0x90')][a0_0x1a16('0x0')] > 0x2328) {
+        if (Game[a0_0x1a16('0x90')][a0_0x1a16('0x0')] > 5000) {
             Visualizer["visuals"]();
             if (VersionUpdater["memory"][a0_0x1a16('0x43')]) {
                 const _0x4a63cf = VersionUpdater["memory"][a0_0x1a16('0x43')];

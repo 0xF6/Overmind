@@ -80,6 +80,10 @@ function main(): void {
 	sandbox();									// Sandbox: run any testing code
 	global.remoteDebugger.run();				// Run remote debugger code if enabled
 	Overmind.postRun();							// Throw errors at end of tick; anything after here might not get run
+	if(Game.cpu.bucket === 10000) {
+		let resu = Game.cpu.generatePixel();
+		console.log(`Pixel generated! [${resu}]`);
+	}
 }
 
 // Main loop if RL mode is enabled (~settings.ts)
