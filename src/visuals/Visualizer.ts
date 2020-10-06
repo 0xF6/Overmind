@@ -325,7 +325,7 @@ export class Visualizer {
 
 	// This typically takes about 0.3-0.6 CPU in total
 	static visuals(): void {
-		this.drawLogo();
+		//this.drawLogo();
 		this.drawGraphs();
 		// this.drawNotifications();
 	}
