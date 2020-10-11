@@ -167,13 +167,17 @@ export class BarrierPlanner {
 	}
 
 	public buildMissingWalls(): void {
+		this.refreshWallPositions();
 		const wallPositions = unpackCoordListAsPosList(this.memoryWalls.wallCoordsPacked, this.colony.room.name);
 		for (const pos of wallPositions) {
-			if (!RoomPlanner.canBuild(STRUCTURE_WALL, pos) && !this.wallShouldBeHere(pos)) {
+			if (!RoomPlanner.canBuild(STRUCTURE_WALL, pos) && !this.wallShouldBeHere(pos)) 
 				continue;
-			}
-			if (this.colony.room.walls.filter(x => x.pos === pos))
+			if (pos.lookForStructure(STRUCTURE_WALL))
 				continue;
+			let cs = pos.lookFor("constructionSite").pop();
+			if (cs && cs.structureType === STRUCTURE_WALL)
+				continue;
+				
 			const ret = pos.createConstructionSite(STRUCTURE_WALL);
 			if (ret != OK) {
 				log.warning(`${this.colony.name}: couldn't create wall site at ${pos.print}. Result: ${ret}`);
@@ -249,6 +253,7 @@ export class BarrierPlanner {
 			}
 			this.visuals();
 		} else {
+			this.buildMissingWalls();
 			if (!this.roomPlanner.memory.relocating && this.colony.level >= BarrierPlanner.settings.buildBarriersAtRCL
 				&& this.roomPlanner.shouldRecheck(2)) {
 				this.buildMissingRamparts();
