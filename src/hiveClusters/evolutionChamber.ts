@@ -161,8 +161,10 @@ export class EvolutionChamber extends HiveCluster {
 		switch (this.memory.status) {
 			case LabStatus.Idle:
 				if (this.memory.activeReaction) {
-					log.info(`${this.colony.print}: starting synthesis of ${reagents[0]} + ${reagents[1]} ` +
-							 `${rightArrow} ${this.memory.activeReaction.mineralType}`);
+					let msg = `${this.colony.print}: starting synthesis of ${reagents[0]} + ${reagents[1]} ` +
+					`${rightArrow} ${this.memory.activeReaction.mineralType}`;
+					log.info(msg);
+					Game.notify(msg);
 					this.memory.status = LabStatus.AcquiringMinerals;
 					this.memory.statusTick = Game.time;
 				}
