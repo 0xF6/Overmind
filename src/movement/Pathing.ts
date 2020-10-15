@@ -416,7 +416,14 @@ export class Pathing {
 		};
 		_.defaults(opts, opts);
 		const ret = this.findPath(startPos, endPos, opts);
-		if (ret.incomplete) log.alert(`Pathing: incomplete path from ${startPos.print} to ${endPos.print}!`);
+		if (ret.incomplete) {
+			opts.avoidSK = false;
+			let ret2 = this.findPath(startPos, endPos, opts);
+			if (ret2.incomplete)
+				log.alert(`Pathing: incomplete path from ${startPos.print} to ${endPos.print}!`);
+			else 
+				return ret2;
+		}
 		return ret;
 	}
 
@@ -426,7 +433,14 @@ export class Pathing {
 	static findPathToRoom(startPos: RoomPosition, roomName: string, options: PathOptions = {}): PathFinderPath {
 		options.range = 23;
 		const ret = this.findPath(startPos, new RoomPosition(25, 25, roomName), options);
-		if (ret.incomplete) log.alert(`Pathing: incomplete path from ${startPos.print} to ${roomName}!`);
+		if (ret.incomplete) {
+			options.avoidSK = false;
+			let ret2 = this.findPath(startPos, new RoomPosition(25, 25, roomName), options);
+			if(ret2.incomplete)
+				log.alert(`Pathing: incomplete path from ${startPos.print} to ${roomName}!`);
+			else 
+				return ret2;
+		}
 		return ret;
 	}
 
@@ -1085,11 +1099,16 @@ export class Pathing {
 			Memory.pathing.distances[name1] = {};
 		}
 		if (!Memory.pathing.distances[name1][name2]) {
-			const ret = this.findPath(pos1, pos2);
+			let ret = this.findPath(pos1, pos2);
 			if (!ret.incomplete) {
 				Memory.pathing.distances[name1][name2] = ret.path.length;
 			} else {
-				log.error(`PATHING: could not compute distance from ${pos1.print} to ${pos2.print}!`);
+				ret = this.findPath(pos1, pos2, { ensurePath: true, avoidSK: false });
+				if(!ret.incomplete) {
+					Memory.pathing.distances[name1][name2] = ret.path.length;
+				} else{
+					log.error(`PATHING: could not compute distance from ${pos1.print} to ${pos2.print}!`);
+				}
 			}
 		}
 		return Memory.pathing.distances[name1][name2];

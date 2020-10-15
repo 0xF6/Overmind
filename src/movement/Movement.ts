@@ -314,7 +314,7 @@ export class Movement {
 
 			// creep.debug(`Pathfinding from ${creep.pos} to ${destination} with opts ${JSON.stringify(pathOpts)}`);
 			// Pathfinding call ------------------------------------------
-			const ret = Pathing.findPath(creep.pos, destination, pathOpts);
+			let ret = Pathing.findPath(creep.pos, destination, pathOpts);
 			// -----------------------------------------------------------
 			// creep.debug(`Pathfinding return: ${print(ret)}`);
 
@@ -326,10 +326,14 @@ export class Movement {
 			}
 			let color = 'orange';
 			if (ret.incomplete) {
-				// uncommenting this is a great way to diagnose creep behavior issues
-				log.debug(`Movement: incomplete path for ${creep.print}! ` +
-						  `(${creep.pos.print} ${rightArrow} ${destination.print})`);
-				color = 'red';
+				pathOpts.avoidSK = false;
+				ret = Pathing.findPath(creep.pos, destination, pathOpts);
+				if(ret.incomplete){
+					// uncommenting this is a great way to diagnose creep behavior issues
+					log.debug(`Movement: incomplete path for ${creep.print}! ` +
+					`(${creep.pos.print} ${rightArrow} ${destination.print})`);
+					color = 'red';
+				}
 			}
 			this.circle(creep.pos, color);
 			moveData.path = Pathing.serializePath(creep.pos, ret.path, color);
