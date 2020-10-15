@@ -11,6 +11,7 @@ export const BuildPriorities: BuildableStructureConstant[] = [
 	STRUCTURE_LINK,
 	STRUCTURE_EXTRACTOR,
 	STRUCTURE_LAB,
+	STRUCTURE_FACTORY,
 	STRUCTURE_NUKER,
 	STRUCTURE_OBSERVER,
 	STRUCTURE_POWER_SPAWN,
@@ -28,6 +29,7 @@ export const FortifyPriorities: BuildableStructureConstant[] = [
 	STRUCTURE_SPAWN,
 	STRUCTURE_TOWER,
 	STRUCTURE_LAB,
+	STRUCTURE_FACTORY,
 	STRUCTURE_NUKER,
 ];
 
