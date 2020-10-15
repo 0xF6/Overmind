@@ -27,11 +27,11 @@
     "node": "10.x"
   },
   "devDependencies": {
-    "@types/node": "^10.17.18",
-    "@types/lodash": "3.10.2",
-    "@types/screeps": "^3.1.0",
     "@rollup/plugin-commonjs": "^11.0.2",
     "@rollup/plugin-node-resolve": "^7.1.1",
+    "@types/lodash": "3.10.2",
+    "@types/node": "^10.17.18",
+    "@types/screeps": "^3.1.0",
     "rollup": "2.6.0",
     "rollup-plugin-progress": "1.1.1",
     "rollup-plugin-screeps": "1.0.0",
@@ -43,6 +43,7 @@
   "dependencies": {
     "@tensorflow/tfjs": "^1.2.11",
     "columnify": "1.5.4",
+    "linqts": "^1.14.3",
     "onnxjs": "^0.1.6",
     "source-map": "0.7.3"
   }
