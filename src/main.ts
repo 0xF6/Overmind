@@ -44,6 +44,8 @@ import _Overmind from './Overmind_obfuscated'; // this should be './Overmind_obf
 import {VersionMigration} from './versionMigration/migrator';
 import {RemoteDebugger} from './debug/remoteDebugger';
 import {ActionParser} from './reinforcementLearning/actionParser';
+import { List } from 'linqts';
+import { TerminalNetworkV2 } from 'logistics/TerminalNetwork_v2';
 // =====================================================================================================================
 
 // Main loop
@@ -83,6 +85,62 @@ function main(): void {
 	if(Game.cpu.bucket === 10000) {
 		let resu = Game.cpu.generatePixel();
 		console.log(`Pixel generated! [${resu}]`);
+	}
+	if(!Memory["collectEnergy"])
+		return;
+	if (Game.market.credits < 1_000_000)
+		return;
+	let term1 = Game.getObjectById<StructureTerminal>("5f8041c12f2269a2aeb485bd");
+	let target = "W27S14";
+	let market = Game.market;
+
+	if (!Memory["low"])
+		Memory["low"] = 40;
+
+	function getLinearDistance(s1: string, s2: string | undefined, b: boolean){
+		return Game.map.getRoomLinearDistance(s1, s2 || "", b);
+	}
+
+	function validateOrderFee(o: Order, target: string): Order | undefined {
+		if (o === undefined) return o;
+		if (o.resourceType !== RESOURCE_ENERGY)
+			return o;
+		let linearDis = getLinearDistance(target, o.roomName, true);
+		let fee = Math.ceil(o.amount * (1 - Math.exp(-linearDis / 30)));
+		let percent = (fee / (o.remainingAmount || 0)) * 100;
+		if(percent > Memory.low)
+			return undefined;
+		return o;
+	}
+	function getNearPrice(res: ResourceConstant){
+		if (res === RESOURCE_ENERGY)
+			return 5;
+		if (res === RESOURCE_CATALYZED_GHODIUM_ACID)
+			return 14.5;
+		return 1;
+	}
+	function getOrder(res: ResourceConstant, target: string): Order | undefined {
+		const orders = market
+				.getAllOrders({type: ORDER_SELL, resourceType: res});
+		return new List(orders)
+			.OrderByDescending(x => x.amount)
+			.Where((x) => (<Order>x).price < getNearPrice(res))
+			.Select(x => validateOrderFee(x, target))
+			.Where(x => !x)
+			.FirstOrDefault();
+	}
+
+	if (term1!.cooldown === 0 && term1!.store.energy < 150000)
+	{
+		let box = Game.rooms[target].storage;
+		if(box && box.store.getFreeCapacity() > 100_000)
+		{
+			const order = 	
+				getOrder(RESOURCE_CATALYZED_GHODIUM_ACID, target) || 
+				getOrder(RESOURCE_ENERGY, target);
+			if (order)
+				market.deal(order.id, order.amount, target);
+		}
 	}
 }
 
